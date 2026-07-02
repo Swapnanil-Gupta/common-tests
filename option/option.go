@@ -210,7 +210,7 @@ func (o *Option) GetNerdctlVersion() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to run nerdctl --version with limactl: %w", err)
 		}
-		version, err := getNerdctlVersionMatch(finchNerdctlVersionRegex, string(versionBytes))
+		version, err := getNerdctlVersionMatch(nerdctlVersionRegex, string(versionBytes))
 		if err != nil {
 			return "", err
 		}
