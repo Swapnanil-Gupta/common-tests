@@ -58,27 +58,82 @@ func TestTranslateWindowsHostPaths(t *testing.T) {
 		want []string
 	}{
 		{
-			name: "BuildContextPath",
+			name: "BuildContextPositional",
 			in:   []string{"build", "-t", "foo", `C:\Users\foo\finch-test123`},
 			want: []string{"build", "-t", "foo", "/mnt/c/Users/foo/finch-test123"},
 		},
 		{
-			name: "DockerfileAndContext",
-			in:   []string{"build", "-f", `D:\a\Dockerfile`, `D:\a`},
-			want: []string{"build", "-f", "/mnt/d/a/Dockerfile", "/mnt/d/a"},
+			name: "BuildDockerfileAndContext",
+			in:   []string{"build", "-f", `D:\a\Dockerfile`, "--no-cache", `D:\a`},
+			want: []string{"build", "-f", "/mnt/d/a/Dockerfile", "--no-cache", "/mnt/d/a"},
 		},
 		{
-			name: "OutputDestKeyValue",
-			in:   []string{"build", "--output", `type=tar,dest=C:\Users\foo\out.tar`, `C:\ctx`},
-			want: []string{"build", "--output", "type=tar,dest=/mnt/c/Users/foo/out.tar", "/mnt/c/ctx"},
+			name: "BuildOutputDest",
+			in:   []string{"build", "-t", "output:tag", "--output", `type=tar,dest=C:\Users\foo\out.tar`, `C:\ctx`},
+			want: []string{"build", "-t", "output:tag", "--output", "type=tar,dest=/mnt/c/Users/foo/out.tar", "/mnt/c/ctx"},
 		},
 		{
-			name: "BindMountHostPathOnly",
+			name: "BuildOutputEqualsForm",
+			in:   []string{"build", `--output=type=docker`, `C:\ctx`},
+			want: []string{"build", "--output=type=docker", "/mnt/c/ctx"},
+		},
+		{
+			name: "BuildSecretSrc",
+			in:   []string{"build", "--secret", `id=mysecret,src=C:\Users\foo\secret.txt`, "-f", `C:\Users\foo\Dockerfile`, `C:\Users\foo`},
+			want: []string{"build", "--secret", "id=mysecret,src=/mnt/c/Users/foo/secret.txt", "-f", "/mnt/c/Users/foo/Dockerfile", "/mnt/c/Users/foo"},
+		},
+		{
+			name: "SaveOutputFlag",
+			in:   []string{"save", "-o", `C:\Users\foo\test.tar`, "alpine:latest"},
+			want: []string{"save", "-o", "/mnt/c/Users/foo/test.tar", "alpine:latest"},
+		},
+		{
+			name: "SaveOutputFlagBeforeImages",
+			in:   []string{"save", "--output", `C:\Users\foo\test.tar`, "alpine:latest", "alpine:3.13"},
+			want: []string{"save", "--output", "/mnt/c/Users/foo/test.tar", "alpine:latest", "alpine:3.13"},
+		},
+		{
+			name: "LoadInputFlag",
+			in:   []string{"load", "-i", `C:\Users\foo\test.tar`},
+			want: []string{"load", "-i", "/mnt/c/Users/foo/test.tar"},
+		},
+		{
+			name: "ComposeFileFlag",
+			in:   []string{"compose", "up", "--file", `C:\Users\foo\docker-compose.yml`},
+			want: []string{"compose", "up", "--file", "/mnt/c/Users/foo/docker-compose.yml"},
+		},
+		{
+			name: "CpHostToContainer",
+			in:   []string{"cp", `C:\Users\foo\test-file`, "finch-test-ctr:/tmp/test-file"},
+			want: []string{"cp", "/mnt/c/Users/foo/test-file", "finch-test-ctr:/tmp/test-file"},
+		},
+		{
+			name: "CpContainerToHost",
+			in:   []string{"cp", "finch-test-ctr:/tmp/test-file", `C:\Users\foo\test-file`},
+			want: []string{"cp", "finch-test-ctr:/tmp/test-file", "/mnt/c/Users/foo/test-file"},
+		},
+		{
+			name: "CpWithFollowLinkFlagAndContainerSpec",
+			in:   []string{"cp", "-L", `C:\Users\foo\symlink`, "finch-test-ctr:/tmp/test-file"},
+			want: []string{"cp", "-L", "/mnt/c/Users/foo/symlink", "finch-test-ctr:/tmp/test-file"},
+		},
+		{
+			name: "RunBindMountHostPathOnly",
 			in:   []string{"run", "-v", `C:\host:/container`, "alpine:3.13"},
 			want: []string{"run", "-v", "/mnt/c/host:/container", "alpine:3.13"},
 		},
 		{
-			name: "ImageTagAndFlagsUntouched",
+			name: "RunNamedVolumeUntouched",
+			in:   []string{"run", "-v", "foo:/usr/share", "--name", "ctr", "alpine:3.13"},
+			want: []string{"run", "-v", "foo:/usr/share", "--name", "ctr", "alpine:3.13"},
+		},
+		{
+			name: "RunAnonymousVolumeUntouched",
+			in:   []string{"run", "-v", "/usr/share", "--name", "ctr", "alpine:3.13"},
+			want: []string{"run", "-v", "/usr/share", "--name", "ctr", "alpine:3.13"},
+		},
+		{
+			name: "PullImageTagAndFlagsUntouched",
 			in:   []string{"pull", "alpine:3.13", "--platform", "linux/amd64"},
 			want: []string{"pull", "alpine:3.13", "--platform", "linux/amd64"},
 		},

@@ -73,6 +73,9 @@ func New(subject []string, modifiers ...Modifier) (*Option, error) {
 // NewCmd creates a command using the stored option and the provided args.
 func (o *Option) NewCmd(args ...string) *exec.Cmd {
 	cmdName := o.subject[0]
+	if o.supportsWindowsHostPathTranslation() {
+		args = translateWindowsHostPaths(args)
+	}
 	cmdArgs := append(o.subject[1:], args...) //nolint:gocritic // appendAssign does not apply to our case.
 	if o.supportsWindowsHostPathTranslation() {
 		cmdArgs = translateWindowsHostPaths(cmdArgs)
@@ -194,7 +197,18 @@ func (o *Option) GetNerdctlVersion() (string, error) {
 		//nolint:gosec // G204 is not an issue because subject is fully controlled by the user.
 		versionBytes, err := exec.Command(o.subject[0], "version").Output()
 		if err != nil {
-			return "", fmt.Errorf("failed to run nerdctl --version: %w", err)
+			return "", fmt.Errorf("failed to run finch version: %w", err)
+		}
+		version, err := getNerdctlVersionMatch(finchNerdctlVersionRegex, string(versionBytes))
+		if err != nil {
+			return "", err
+		}
+		return version, nil
+	case "limactl":
+		// Assumes that "finch" is the vm name
+		versionBytes, err := exec.Command(o.subject[0], "shell", "finch", "nerdctl", "--version").Output()
+		if err != nil {
+			return "", fmt.Errorf("failed to run nerdctl --version with limactl: %w", err)
 		}
 		version, err := getNerdctlVersionMatch(finchNerdctlVersionRegex, string(versionBytes))
 		if err != nil {
