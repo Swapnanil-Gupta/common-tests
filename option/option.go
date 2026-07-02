@@ -25,6 +25,10 @@ const (
 var (
 	nerdctlVersionRegex      = regexp.MustCompile(`nerdctl\s+version\s+(\S+)`)
 	finchNerdctlVersionRegex = regexp.MustCompile(`nerdctl:\s+Version:\s+(\S+)`)
+
+	// windowsPathRegex matches a Windows absolute path that begins with a drive
+	// letter, e.g. `C:\Users\foo`.
+	windowsPathRegex = regexp.MustCompile(`([A-Za-z]):(\\[^:]*)`)
 )
 
 // Option customizes how tests are run.
@@ -73,9 +77,28 @@ func (o *Option) NewCmd(args ...string) *exec.Cmd {
 		args = translateWindowsHostPaths(args)
 	}
 	cmdArgs := append(o.subject[1:], args...) //nolint:gocritic // appendAssign does not apply to our case.
-	cmd := exec.Command(cmdName, cmdArgs...)  //nolint:gosec // G204 is not an issue because cmdName is fully controlled by the user.
+	if o.supportsWindowsHostPathTranslation() {
+		cmdArgs = translateWindowsHostPaths(cmdArgs)
+	}
+	cmd := exec.Command(cmdName, cmdArgs...) //nolint:gosec // G204 is not an issue because cmdName is fully controlled by the user.
 	cmd.Env = append(os.Environ(), o.env...)
 	return cmd
+}
+
+// translateWindowsHostPaths rewrites Windows drive-letter paths embedded in the
+// command arguments to their WSL2 equivalents (e.g. `C:\Users\foo` ->
+// `/mnt/c/Users/foo`).
+func translateWindowsHostPaths(args []string) []string {
+	translated := make([]string, len(args))
+	for i, arg := range args {
+		translated[i] = windowsPathRegex.ReplaceAllStringFunc(arg, func(match string) string {
+			groups := windowsPathRegex.FindStringSubmatch(match)
+			drive := strings.ToLower(groups[1])
+			rest := strings.ReplaceAll(groups[2], `\`, "/")
+			return "/mnt/" + drive + rest
+		})
+	}
+	return translated
 }
 
 // UpdateEnv updates the environment variable for the key name of the input.
