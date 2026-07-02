@@ -49,6 +49,58 @@ func TestSupportsEnvVarPassthrough(t *testing.T) {
 	}
 }
 
+func TestTranslateWindowsHostPaths(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   []string
+		want []string
+	}{
+		{
+			name: "BuildContextPath",
+			in:   []string{"build", "-t", "foo", `C:\Users\foo\finch-test123`},
+			want: []string{"build", "-t", "foo", "/mnt/c/Users/foo/finch-test123"},
+		},
+		{
+			name: "DockerfileAndContext",
+			in:   []string{"build", "-f", `D:\a\Dockerfile`, `D:\a`},
+			want: []string{"build", "-f", "/mnt/d/a/Dockerfile", "/mnt/d/a"},
+		},
+		{
+			name: "OutputDestKeyValue",
+			in:   []string{"build", "--output", `type=tar,dest=C:\Users\foo\out.tar`, `C:\ctx`},
+			want: []string{"build", "--output", "type=tar,dest=/mnt/c/Users/foo/out.tar", "/mnt/c/ctx"},
+		},
+		{
+			name: "BindMountHostPathOnly",
+			in:   []string{"run", "-v", `C:\host:/container`, "alpine:3.13"},
+			want: []string{"run", "-v", "/mnt/c/host:/container", "alpine:3.13"},
+		},
+		{
+			name: "ImageTagAndFlagsUntouched",
+			in:   []string{"pull", "alpine:3.13", "--platform", "linux/amd64"},
+			want: []string{"pull", "alpine:3.13", "--platform", "linux/amd64"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := translateWindowsHostPaths(test.in)
+			if len(got) != len(test.want) {
+				t.Fatalf("length mismatch: got %v, want %v", got, test.want)
+			}
+			for i := range got {
+				if got[i] != test.want[i] {
+					t.Errorf("arg %d: got %q, want %q", i, got[i], test.want[i])
+				}
+			}
+		})
+	}
+}
+
 func TestNerdctlVersion(t *testing.T) {
 	t.Parallel()
 
