@@ -18,22 +18,110 @@ func TestSupportsEnvVarPassthrough(t *testing.T) {
 		assert func(*testing.T, *Option)
 	}{
 		{
-			name: "IsNotEnvVarPassthroughByDefault",
+			name: "IsEnvVarPassthroughByDefault",
 			mods: []Modifier{},
 			assert: func(t *testing.T, uut *Option) {
-				if uut.SupportsEnvVarPassthrough() {
-					t.Fatal("expected default SupportsEnvVarPassthrough to be false")
+				if !uut.SupportsEnvVarPassthrough() {
+					t.Fatal("expected default SupportsEnvVarPassthrough to be true")
 				}
 			},
 		},
 		{
 			name: "IsNotEnvVarPassthrough",
 			mods: []Modifier{
-				WithEnvironmentVariablePassthrough(),
+				WithNoEnvironmentVariablePassthrough(),
 			},
 			assert: func(t *testing.T, uut *Option) {
-				if !uut.SupportsEnvVarPassthrough() {
-					t.Fatal("expected SupportsEnvVarPassthrough to be true")
+				if uut.SupportsEnvVarPassthrough() {
+					t.Fatal("expected SupportsEnvVarPassthrough to be false")
+				}
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			uut, err := New([]string{"nerdctl"}, test.mods...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			test.assert(t, uut)
+		})
+	}
+}
+
+func TestSupportsWindowsHostPathTranslation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		mods   []Modifier
+		assert func(*testing.T, *Option)
+	}{
+		{
+			name: "IsNotWindowsHostPathTranslation",
+			mods: []Modifier{},
+			assert: func(t *testing.T, uut *Option) {
+				if uut.SupportsWindowsHostPathTranslation() {
+					t.Fatal("expected default SupportsWindowsHostPathTranslation to be false")
+				}
+			},
+		},
+		{
+			name: "IsWindowsHostPathTranslation",
+			mods: []Modifier{
+				WithWindowsHostPathTranslation(),
+			},
+			assert: func(t *testing.T, uut *Option) {
+				if !uut.SupportsWindowsHostPathTranslation() {
+					t.Fatal("expected SupportsWindowsHostPathTranslation to be true")
+				}
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			uut, err := New([]string{"nerdctl"}, test.mods...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			test.assert(t, uut)
+		})
+	}
+}
+
+func TestSupportsResolveEnvVarPassthrough(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		mods   []Modifier
+		assert func(*testing.T, *Option)
+	}{
+		{
+			name: "IsNotResolveEnvVarPassthrough",
+			mods: []Modifier{},
+			assert: func(t *testing.T, uut *Option) {
+				if uut.SupportsResolveEnvVarPassthrough() {
+					t.Fatal("expected default SupportsResolveEnvVarPassthrough to be false")
+				}
+			},
+		},
+		{
+			name: "IsresolveEnvVarPassthrough",
+			mods: []Modifier{
+				WithResolveEnvVarPassthrough(),
+			},
+			assert: func(t *testing.T, uut *Option) {
+				if !uut.SupportsResolveEnvVarPassthrough() {
+					t.Fatal("expected SupportsResolveEnvVarPassthrough to be true")
 				}
 			},
 		},

@@ -10,7 +10,7 @@ import (
 )
 
 // The path translation logic here is ported from the Finch CLI:
-// https://github.com/runfinch/finch/blob/main/cmd/finch/nerdctl_windows.go
+// https://github.com/runfinch/finch/blob/ff1346b1d76f083ba86433e4501cbb5e5ce29634/cmd/finch/nerdctl_windows.go
 
 var aliasMap = map[string]string{
 	"build": "image build",
