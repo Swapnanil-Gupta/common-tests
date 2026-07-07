@@ -34,9 +34,9 @@ func Env(env []string) Modifier {
 // WithNoEnvironmentVariablePassthrough denotes the option does not support environment variable passthrough.
 //
 // This is useful for disabling tests that require this feature.
-func WithNoEnvironmentVariablePassthrough() Modifier {
+func WithEnvironmentVariablePassthrough() Modifier {
 	return newFuncModifier(func(o *Option) {
-		delete(o.features, environmentVariablePassthrough)
+		o.features[environmentVariablePassthrough] = true
 	})
 }
 
@@ -47,5 +47,18 @@ func WithNoEnvironmentVariablePassthrough() Modifier {
 func WithNerdctlVersion(version string) Modifier {
 	return newFuncModifier(func(o *Option) {
 		o.features[nerdctlVersion] = version
+	})
+}
+
+// WithWindowsHostPathTranslation makes the option rewrite Windows drive-letter
+// paths (e.g. `C:\Users\foo`) in command arguments to their WSL2 equivalents
+// (e.g. `/mnt/c/Users/foo`) before executing.
+//
+// This is done in the Finch CLI too.
+// See (https://github.com/runfinch/finch/blob/ff1346b1d76f083ba86433e4501cbb5e5ce29634/cmd/finch/nerdctl_windows.go#L72),
+// But since common-tests is meant to be executed outside of Finch CLI (e.g Finch Core), we need this as an option.
+func WithWindowsHostPathTranslation() Modifier {
+	return newFuncModifier(func(o *Option) {
+		o.features[windowsHostPathTranslation] = true
 	})
 }
