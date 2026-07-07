@@ -55,8 +55,9 @@ func New(subject []string, modifiers ...Modifier) (*Option, error) {
 	o := &Option{
 		subject: subject,
 		features: map[feature]any{
-			environmentVariablePassthrough: true,
+			environmentVariablePassthrough: false,
 			nerdctlVersion:                 nerdctl2xx,
+			windowsHostPathTranslation:     false,
 		},
 	}
 	for _, modifier := range modifiers {
@@ -69,8 +70,11 @@ func New(subject []string, modifiers ...Modifier) (*Option, error) {
 // NewCmd creates a command using the stored option and the provided args.
 func (o *Option) NewCmd(args ...string) *exec.Cmd {
 	cmdName := o.subject[0]
-	if o.supportsWindowsHostPathTranslation() {
+	if o.SupportsWindowsHostPathTranslation() {
 		args = translateWindowsHostPaths(args)
+	}
+	if o.SupportsEnvVarPassthrough() {
+		args = resolveEnvPassthrough(args)
 	}
 	cmdArgs := append(o.subject[1:], args...) //nolint:gocritic // appendAssign does not apply to our case.
 	cmd := exec.Command(cmdName, cmdArgs...)  //nolint:gosec // G204 is not an issue because cmdName is fully controlled by the user.
@@ -119,7 +123,7 @@ func (o *Option) SupportsEnvVarPassthrough() bool {
 
 // supportsWindowsHostPathTranslation reports whether command arguments should
 // have Windows host paths rewritten to their WSL2 equivalents before execution.
-func (o *Option) supportsWindowsHostPathTranslation() bool {
+func (o *Option) SupportsWindowsHostPathTranslation() bool {
 	if value, exists := o.features[windowsHostPathTranslation]; exists {
 		if boolValue, ok := value.(bool); ok {
 			return boolValue

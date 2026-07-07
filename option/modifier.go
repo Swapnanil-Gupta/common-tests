@@ -34,9 +34,9 @@ func Env(env []string) Modifier {
 // WithNoEnvironmentVariablePassthrough denotes the option does not support environment variable passthrough.
 //
 // This is useful for disabling tests that require this feature.
-func WithNoEnvironmentVariablePassthrough() Modifier {
+func WithEnvironmentVariablePassthrough() Modifier {
 	return newFuncModifier(func(o *Option) {
-		delete(o.features, environmentVariablePassthrough)
+		o.features[environmentVariablePassthrough] = true
 	})
 }
 
