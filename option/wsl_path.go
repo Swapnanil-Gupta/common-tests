@@ -76,6 +76,14 @@ var argHandlerMap = map[string]map[string]argHandler{
 		"-w":        handleWorkdir,
 		"--workdir": handleWorkdir,
 	},
+	"ps": {
+		"-f":       handleFilter,
+		"--filter": handleFilter,
+	},
+	"container ps": {
+		"-f":       handleFilter,
+		"--filter": handleFilter,
+	},
 	"exec": {
 		"--env-file": handleFilePath,
 	},
@@ -286,6 +294,41 @@ func handleWorkdir(args []string, index int) error {
 	}
 	if index+1 < len(args) && isWindowsPath(args[index+1]) {
 		args[index+1] = convertToWSLPath(args[index+1])
+	}
+	return nil
+}
+
+func handleFilter(args []string, index int) error {
+	arg := args[index]
+
+	var (
+		value        string
+		before       string
+		hasEqualForm bool
+	)
+	switch {
+	case strings.HasPrefix(arg, "--filter="):
+		before, value, _ = strings.Cut(arg, "=")
+		hasEqualForm = true
+	case strings.HasPrefix(arg, "-f="):
+		before, value, _ = strings.Cut(arg, "=")
+		hasEqualForm = true
+	case index+1 < len(args):
+		value = args[index+1]
+	default:
+		return nil
+	}
+
+	key, path, found := strings.Cut(value, "=")
+	if !found || key != "volume" || !isWindowsPath(path) {
+		return nil
+	}
+	newValue := key + "=" + convertToWSLPath(path)
+
+	if hasEqualForm {
+		args[index] = before + "=" + newValue
+	} else {
+		args[index+1] = newValue
 	}
 	return nil
 }

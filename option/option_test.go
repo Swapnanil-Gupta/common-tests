@@ -268,6 +268,21 @@ func TestTranslateWindowsHostPaths(t *testing.T) {
 			want: []string{"run", "-w", "/app", "alpine:3.13"},
 		},
 		{
+			name: "PsVolumeFilterWindowsPath",
+			in:   []string{"ps", "-a", "--format", "{{.Names}}", "--filter", `volume=D:\a\finch`},
+			want: []string{"ps", "-a", "--format", "{{.Names}}", "--filter", "volume=/mnt/d/a/finch"},
+		},
+		{
+			name: "PsVolumeFilterEqualsForm",
+			in:   []string{"ps", `--filter=volume=C:\host`},
+			want: []string{"ps", "--filter=volume=/mnt/c/host"},
+		},
+		{
+			name: "PsNameFilterUntouched",
+			in:   []string{"ps", "--filter", "name=ctr_1"},
+			want: []string{"ps", "--filter", "name=ctr_1"},
+		},
+		{
 			name: "RunMountBindSource",
 			in:   []string{"run", "-d", "--mount", `type=bind,source=C:\Users\foo,target=/app`, "alpine:3.13"},
 			want: []string{"run", "-d", "--mount", "type=bind,source=/mnt/c/Users/foo,target=/app", "alpine:3.13"},
