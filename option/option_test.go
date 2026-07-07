@@ -156,6 +156,31 @@ func TestTranslateWindowsHostPaths(t *testing.T) {
 			want: []string{"run", "-v", "/usr/share", "--name", "ctr", "alpine:3.13"},
 		},
 		{
+			name: "RunMountBindSource",
+			in:   []string{"run", "-d", "--mount", `type=bind,source=C:\Users\foo,target=/app`, "alpine:3.13"},
+			want: []string{"run", "-d", "--mount", "type=bind,source=/mnt/c/Users/foo,target=/app", "alpine:3.13"},
+		},
+		{
+			name: "RunMountBindSrcReadonly",
+			in:   []string{"run", "--mount", `type=bind,src=C:\host,target=/app,ro`, "alpine:3.13"},
+			want: []string{"run", "--mount", "type=bind,src=/mnt/c/host,target=/app,ro", "alpine:3.13"},
+		},
+		{
+			name: "RunMountBindEqualsForm",
+			in:   []string{"run", `--mount=type=bind,source=C:\host,target=/app`, "alpine:3.13"},
+			want: []string{"run", "--mount=type=bind,source=/mnt/c/host,target=/app", "alpine:3.13"},
+		},
+		{
+			name: "RunMountVolumeUntouched",
+			in:   []string{"run", "--mount", "type=volume,source=myvol,target=/app", "alpine:3.13"},
+			want: []string{"run", "--mount", "type=volume,source=myvol,target=/app", "alpine:3.13"},
+		},
+		{
+			name: "RunMountTmpfsUntouched",
+			in:   []string{"run", "--mount", "type=tmpfs,target=/app", "alpine:3.13"},
+			want: []string{"run", "--mount", "type=tmpfs,target=/app", "alpine:3.13"},
+		},
+		{
 			name: "PullImageTagAndFlagsUntouched",
 			in:   []string{"pull", "alpine:3.13", "--platform", "linux/amd64"},
 			want: []string{"pull", "alpine:3.13", "--platform", "linux/amd64"},

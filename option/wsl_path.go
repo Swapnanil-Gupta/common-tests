@@ -29,11 +29,12 @@ var commandHandlerMap = map[string]commandHandler{
 
 var argHandlerMap = map[string]map[string]argHandler{
 	"image build": {
-		"-f":       handleFilePath,
-		"--file":   handleFilePath,
-		"-o":       handleOutputOption,
-		"--output": handleOutputOption,
-		"--secret": handleSecretOption,
+		"-f":        handleFilePath,
+		"--file":    handleFilePath,
+		"-o":        handleOutputOption,
+		"--output":  handleOutputOption,
+		"--secret":  handleSecretOption,
+		"--iidfile": handleFilePath,
 	},
 	"image save": {
 		"-o":       handleFilePath,
@@ -54,18 +55,20 @@ var argHandlerMap = map[string]map[string]argHandler{
 	"container run": {
 		"-v":           handleVolume,
 		"--volume":     handleVolume,
+		"--mount":      handleMount,
 		"--env-file":   handleFilePath,
 		"--cidfile":    handleFilePath,
 		"--label-file": handleFilePath,
-		"--iidfile":    handleFilePath,
 	},
 	"run": {
 		"-v":       handleVolume,
 		"--volume": handleVolume,
+		"--mount":  handleMount,
 	},
 	"create": {
 		"-v":       handleVolume,
 		"--volume": handleVolume,
+		"--mount":  handleMount,
 	},
 	"exec": {
 		"--env-file": handleFilePath,
@@ -193,6 +196,64 @@ func handleVolume(args []string, index int) error {
 		args[index] = before + "=" + wslHostPath + ":" + containerPath + readWrite
 	} else {
 		args[index+1] = wslHostPath + ":" + containerPath + readWrite
+	}
+	return nil
+}
+
+func handleMount(args []string, index int) error {
+	arg := args[index]
+
+	var (
+		value        string
+		before       string
+		hasEqualForm bool
+	)
+	switch {
+	case strings.Contains(arg, "="):
+		before, value, _ = strings.Cut(arg, "=")
+		hasEqualForm = true
+	case index+1 < len(args):
+		value = args[index+1]
+	default:
+		return nil
+	}
+
+	entries := strings.Split(value, ",")
+	m := make(map[string]string)
+	for _, e := range entries {
+		k, v, found := strings.Cut(e, "=")
+		if found {
+			m[strings.TrimSpace(k)] = strings.TrimSpace(v)
+		}
+	}
+
+	// Only translate bind mounts; volume/tmpfs sources are not host paths.
+	if m["type"] != "bind" {
+		return nil
+	}
+
+	key := "src"
+	hostPath, ok := m[key]
+	if !ok {
+		key = "source"
+		hostPath, ok = m[key]
+	}
+	if !ok || !strings.Contains(hostPath, `\`) {
+		return nil
+	}
+
+	for i, e := range entries {
+		k, _, found := strings.Cut(e, "=")
+		if found && strings.TrimSpace(k) == key {
+			entries[i] = k + "=" + convertToWSLPath(hostPath)
+		}
+	}
+	newValue := strings.Join(entries, ",")
+
+	if hasEqualForm {
+		args[index] = before + "=" + newValue
+	} else {
+		args[index+1] = newValue
 	}
 	return nil
 }
