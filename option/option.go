@@ -72,11 +72,11 @@ func New(subject []string, modifiers ...Modifier) (*Option, error) {
 // NewCmd creates a command using the stored option and the provided args.
 func (o *Option) NewCmd(args ...string) *exec.Cmd {
 	cmdName := o.subject[0]
-	if o.SupportsWindowsHostPathTranslation() {
-		args = translateWindowsHostPaths(args)
-	}
 	if o.SupportsEnvVarPassthrough() && o.SupportsResolveEnvVarPassthrough() {
 		args = resolveEnvPassthrough(args)
+	}
+	if o.SupportsWindowsHostPathTranslation() {
+		args = translateWindowsHostPaths(args)
 	}
 	cmdArgs := append(o.subject[1:], args...) //nolint:gocritic // appendAssign does not apply to our case.
 	cmd := exec.Command(cmdName, cmdArgs...)  //nolint:gosec // G204 is not an issue because cmdName is fully controlled by the user.
