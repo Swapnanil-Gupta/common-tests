@@ -510,3 +510,36 @@ func assertArgsEqual(t *testing.T, got, want []string) {
 		}
 	}
 }
+
+func TestNewCmdEnvInjection(t *testing.T) {
+	subject := []string{"limactl", "shell", "finch", "sudo", "-E", "nerdctl"}
+
+	t.Run("InjectsEnvBeforeCommandWhenResolutionEnabled", func(t *testing.T) {
+		uut, err := New(subject, WithResolveEnvVarPassthrough())
+		if err != nil {
+			t.Fatal(err)
+		}
+		uut.UpdateEnv("COMPOSE_FILE", "/tmp/docker-compose.yaml")
+
+		cmd := uut.NewCmd("compose", "build")
+		// limactl [shell finch sudo -E COMPOSE_FILE=/tmp/... nerdctl] compose build
+		want := []string{
+			"shell", "finch", "sudo", "-E",
+			"COMPOSE_FILE=/tmp/docker-compose.yaml", "nerdctl",
+			"compose", "build",
+		}
+		assertArgsEqual(t, cmd.Args[1:], want)
+	})
+
+	t.Run("DoesNotInjectEnvWhenResolutionDisabled", func(t *testing.T) {
+		uut, err := New(subject)
+		if err != nil {
+			t.Fatal(err)
+		}
+		uut.UpdateEnv("COMPOSE_FILE", "/tmp/docker-compose.yaml")
+
+		cmd := uut.NewCmd("compose", "build")
+		want := []string{"shell", "finch", "sudo", "-E", "nerdctl", "compose", "build"}
+		assertArgsEqual(t, cmd.Args[1:], want)
+	})
+}

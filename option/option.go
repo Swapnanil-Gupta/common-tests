@@ -78,10 +78,32 @@ func (o *Option) NewCmd(args ...string) *exec.Cmd {
 	if o.SupportsWindowsHostPathTranslation() {
 		args = translateWindowsHostPaths(args)
 	}
-	cmdArgs := append(o.subject[1:], args...) //nolint:gocritic // appendAssign does not apply to our case.
-	cmd := exec.Command(cmdName, cmdArgs...)  //nolint:gosec // G204 is not an issue because cmdName is fully controlled by the user.
+
+	// Inject o.env as `KEY=VALUE` tokens right before the
+	// final subject element (the command, e.g. nerdctl).
+	// This mirrors the Finch CLI's host-env passthrough.
+	// See (https://github.com/runfinch/finch/blob/ff1346b1d76f083ba86433e4501cbb5e5ce29634/cmd/finch/nerdctl_remote.go#L319).
+	subjectArgs := o.subject[1:]
+	if o.SupportsResolveEnvVarPassthrough() && len(o.env) > 0 {
+		subjectArgs = injectEnvBeforeLast(subjectArgs, o.env)
+	}
+
+	cmdArgs := append(subjectArgs, args...)  //nolint:gocritic // appendAssign does not apply to our case.
+	cmd := exec.Command(cmdName, cmdArgs...) //nolint:gosec // G204 is not an issue because cmdName is fully controlled by the user.
 	cmd.Env = append(os.Environ(), o.env...)
 	return cmd
+}
+
+func injectEnvBeforeLast(subjectArgs, env []string) []string {
+	if len(subjectArgs) == 0 {
+		return append([]string{}, env...)
+	}
+	last := len(subjectArgs) - 1
+	out := make([]string, 0, len(subjectArgs)+len(env))
+	out = append(out, subjectArgs[:last]...)
+	out = append(out, env...)
+	out = append(out, subjectArgs[last])
+	return out
 }
 
 // UpdateEnv updates the environment variable for the key name of the input.
