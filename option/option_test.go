@@ -248,6 +248,26 @@ func TestTranslateWindowsHostPaths(t *testing.T) {
 			want: []string{"run", "-v", "/usr/share", "--name", "ctr", "alpine:3.13"},
 		},
 		{
+			name: "RunBindMountWindowsPathBothSides",
+			in:   []string{"run", "-v", `C:\host:C:\host`, "alpine:3.13"},
+			want: []string{"run", "-v", "/mnt/c/host:/mnt/c/host", "alpine:3.13"},
+		},
+		{
+			name: "RunWorkdirWindowsPath",
+			in:   []string{"run", "-w", `D:\a\finch`, "alpine:3.13"},
+			want: []string{"run", "-w", "/mnt/d/a/finch", "alpine:3.13"},
+		},
+		{
+			name: "RunWorkdirLongFlagWindowsPath",
+			in:   []string{"run", "--workdir", `C:\Users\foo`, "alpine:3.13"},
+			want: []string{"run", "--workdir", "/mnt/c/Users/foo", "alpine:3.13"},
+		},
+		{
+			name: "RunWorkdirLinuxPathUntouched",
+			in:   []string{"run", "-w", "/app", "alpine:3.13"},
+			want: []string{"run", "-w", "/app", "alpine:3.13"},
+		},
+		{
 			name: "RunMountBindSource",
 			in:   []string{"run", "-d", "--mount", `type=bind,source=C:\Users\foo,target=/app`, "alpine:3.13"},
 			want: []string{"run", "-d", "--mount", "type=bind,source=/mnt/c/Users/foo,target=/app", "alpine:3.13"},

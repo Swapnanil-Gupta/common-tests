@@ -56,19 +56,25 @@ var argHandlerMap = map[string]map[string]argHandler{
 		"-v":           handleVolume,
 		"--volume":     handleVolume,
 		"--mount":      handleMount,
+		"-w":           handleWorkdir,
+		"--workdir":    handleWorkdir,
 		"--env-file":   handleFilePath,
 		"--cidfile":    handleFilePath,
 		"--label-file": handleFilePath,
 	},
 	"run": {
-		"-v":       handleVolume,
-		"--volume": handleVolume,
-		"--mount":  handleMount,
+		"-v":        handleVolume,
+		"--volume":  handleVolume,
+		"--mount":   handleMount,
+		"-w":        handleWorkdir,
+		"--workdir": handleWorkdir,
 	},
 	"create": {
-		"-v":       handleVolume,
-		"--volume": handleVolume,
-		"--mount":  handleMount,
+		"-v":        handleVolume,
+		"--volume":  handleVolume,
+		"--mount":   handleMount,
+		"-w":        handleWorkdir,
+		"--workdir": handleWorkdir,
 	},
 	"exec": {
 		"--env-file": handleFilePath,
@@ -180,17 +186,28 @@ func handleVolume(args []string, index int) error {
 		cleanArg = value[:len(value)-4]
 	}
 
-	colonIndex := strings.LastIndex(cleanArg, ":")
-	if colonIndex < 0 {
-		return nil
-	}
-	hostPath := cleanArg[:colonIndex]
-	if !strings.Contains(hostPath, `\`) || len(hostPath) == 0 {
+	// The host path must be a Windows drive path (eg C:\...).
+	if !isWindowsPath(cleanArg) {
 		return nil
 	}
 
-	containerPath := cleanArg[colonIndex+1:]
+	// Split the host and container paths at the separator colon that follows the
+	// host path, skipping the drive-letter colon at index 1 (eg the ':' between
+	// "C:\host" and "/container").
+	sep := strings.IndexByte(cleanArg[2:], ':')
+	if sep < 0 {
+		return nil
+	}
+	sep += 2
+	hostPath := cleanArg[:sep]
+	containerPath := cleanArg[sep+1:]
+
 	wslHostPath := convertToWSLPath(hostPath)
+	// The container path is normally a Linux path, but some tests reuse the host
+	// path (eg `-v <pwd>:<pwd>`); convert it too when it is a Windows path.
+	if isWindowsPath(containerPath) {
+		containerPath = convertToWSLPath(containerPath)
+	}
 
 	if hasEqualForm {
 		args[index] = before + "=" + wslHostPath + ":" + containerPath + readWrite
@@ -254,6 +271,21 @@ func handleMount(args []string, index int) error {
 		args[index] = before + "=" + newValue
 	} else {
 		args[index+1] = newValue
+	}
+	return nil
+}
+
+func handleWorkdir(args []string, index int) error {
+	arg := args[index]
+	if strings.Contains(arg, "=") {
+		before, after, _ := strings.Cut(arg, "=")
+		if isWindowsPath(after) {
+			args[index] = before + "=" + convertToWSLPath(after)
+		}
+		return nil
+	}
+	if index+1 < len(args) && isWindowsPath(args[index+1]) {
+		args[index+1] = convertToWSLPath(args[index+1])
 	}
 	return nil
 }
