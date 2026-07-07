@@ -18,6 +18,7 @@ type feature int
 
 const (
 	environmentVariablePassthrough feature = iota
+	resolveEnvVarPassthrough       feature = iota
 	nerdctlVersion                 feature = iota
 	windowsHostPathTranslation     feature = iota
 )
@@ -55,7 +56,8 @@ func New(subject []string, modifiers ...Modifier) (*Option, error) {
 	o := &Option{
 		subject: subject,
 		features: map[feature]any{
-			environmentVariablePassthrough: false,
+			environmentVariablePassthrough: true,
+			resolveEnvVarPassthrough:       false,
 			nerdctlVersion:                 nerdctl2xx,
 			windowsHostPathTranslation:     false,
 		},
@@ -73,7 +75,7 @@ func (o *Option) NewCmd(args ...string) *exec.Cmd {
 	if o.SupportsWindowsHostPathTranslation() {
 		args = translateWindowsHostPaths(args)
 	}
-	if o.SupportsEnvVarPassthrough() {
+	if o.SupportsEnvVarPassthrough() && o.SupportsResolveEnvVarPassthrough() {
 		args = resolveEnvPassthrough(args)
 	}
 	cmdArgs := append(o.subject[1:], args...) //nolint:gocritic // appendAssign does not apply to our case.
@@ -121,10 +123,21 @@ func (o *Option) SupportsEnvVarPassthrough() bool {
 	return false
 }
 
-// supportsWindowsHostPathTranslation reports whether command arguments should
+// SupportsWindowsHostPathTranslation reports whether command arguments should
 // have Windows host paths rewritten to their WSL2 equivalents before execution.
 func (o *Option) SupportsWindowsHostPathTranslation() bool {
 	if value, exists := o.features[windowsHostPathTranslation]; exists {
+		if boolValue, ok := value.(bool); ok {
+			return boolValue
+		}
+	}
+	return false
+}
+
+// SupportsResolveEnvVarPassthrough is used by tests to check if the option
+// supports [feature.resolveEnvVarPassthrough].
+func (o *Option) SupportsResolveEnvVarPassthrough() bool {
+	if value, exists := o.features[resolveEnvVarPassthrough]; exists {
 		if boolValue, ok := value.(bool); ok {
 			return boolValue
 		}
