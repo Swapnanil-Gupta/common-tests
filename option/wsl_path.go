@@ -93,6 +93,14 @@ var argHandlerMap = map[string]map[string]argHandler{
 	},
 }
 
+// These are environment variables whose value is a host path and
+// therefore needs Windows->WSL path translation when injected into the guest.
+// The Finch CLI translates COMPOSE_FILE the same way.
+// See (https://github.com/runfinch/finch/blob/ff1346b1d76f083ba86433e4501cbb5e5ce29634/cmd/finch/nerdctl_remote.go#L332).
+var pathValuedEnvKeys = map[string]bool{
+	"COMPOSE_FILE": true,
+}
+
 func translateWindowsHostPaths(args []string) []string {
 	if len(args) == 0 {
 		return args
@@ -150,6 +158,19 @@ func convertToWSLPath(winPath string) string {
 
 func isWindowsPath(s string) bool {
 	return len(s) >= 3 && s[1] == ':' && (s[2] == '\\' || s[2] == '/')
+}
+
+func translateWindowsHostEnv(env []string) []string {
+	out := make([]string, len(env))
+	for i, e := range env {
+		key, value, found := strings.Cut(e, "=")
+		if found && pathValuedEnvKeys[key] && isWindowsPath(value) {
+			out[i] = key + "=" + convertToWSLPath(value)
+		} else {
+			out[i] = e
+		}
+	}
+	return out
 }
 
 func handleFilePath(args []string, index int) error {

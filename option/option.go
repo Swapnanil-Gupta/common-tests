@@ -84,8 +84,13 @@ func (o *Option) NewCmd(args ...string) *exec.Cmd {
 	// This mirrors the Finch CLI's host-env passthrough.
 	// See (https://github.com/runfinch/finch/blob/ff1346b1d76f083ba86433e4501cbb5e5ce29634/cmd/finch/nerdctl_remote.go#L319).
 	subjectArgs := o.subject[1:]
-	if o.SupportsResolveEnvVarPassthrough() && len(o.env) > 0 {
-		subjectArgs = injectEnvBeforeLast(subjectArgs, o.env)
+	if o.SupportsEnvVarPassthrough() &&
+		o.SupportsResolveEnvVarPassthrough() &&
+		o.SupportsWindowsHostPathTranslation() &&
+		len(o.env) > 0 {
+		env := o.env
+		env = translateWindowsHostEnv(env)
+		subjectArgs = injectEnvBeforeLast(subjectArgs, env)
 	}
 
 	cmdArgs := append(subjectArgs, args...)  //nolint:gocritic // appendAssign does not apply to our case.

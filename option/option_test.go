@@ -397,8 +397,8 @@ func TestNerdctlVersion(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // subtests set process environment variables via t.Setenv, which is incompatible with t.Parallel.
 func TestResolveEnvPassthrough(t *testing.T) {
-	// Not parallel: these subtests set process environment variables via t.Setenv.
 	t.Setenv("AVAR1", "avalue")
 	os.Unsetenv("AVAR2") //nolint:errcheck // ensure AVAR2 is not set on the host.
 
@@ -467,6 +467,7 @@ func TestResolveEnvPassthrough(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // subtests set process environment variables via t.Setenv, which is incompatible with t.Parallel.
 func TestResolveEnvPassthroughEnvFile(t *testing.T) {
 	t.Setenv("AVAR1", "avalue")
 	os.Unsetenv("AVAR2") //nolint:errcheck // ensure AVAR2 is not set on the host.
@@ -512,9 +513,13 @@ func assertArgsEqual(t *testing.T, got, want []string) {
 }
 
 func TestNewCmdEnvInjection(t *testing.T) {
+	t.Parallel()
+
 	subject := []string{"limactl", "shell", "finch", "sudo", "-E", "nerdctl"}
 
 	t.Run("InjectsEnvBeforeCommandWhenResolutionEnabled", func(t *testing.T) {
+		t.Parallel()
+
 		uut, err := New(subject, WithResolveEnvVarPassthrough())
 		if err != nil {
 			t.Fatal(err)
@@ -532,6 +537,8 @@ func TestNewCmdEnvInjection(t *testing.T) {
 	})
 
 	t.Run("DoesNotInjectEnvWhenResolutionDisabled", func(t *testing.T) {
+		t.Parallel()
+
 		uut, err := New(subject)
 		if err != nil {
 			t.Fatal(err)
