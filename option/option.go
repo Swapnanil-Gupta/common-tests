@@ -18,7 +18,9 @@ type feature int
 
 const (
 	environmentVariablePassthrough feature = iota
+	resolveEnvVarPassthrough       feature = iota
 	nerdctlVersion                 feature = iota
+	windowsHostPathTranslation     feature = iota
 )
 
 var (
@@ -55,7 +57,9 @@ func New(subject []string, modifiers ...Modifier) (*Option, error) {
 		subject: subject,
 		features: map[feature]any{
 			environmentVariablePassthrough: true,
+			resolveEnvVarPassthrough:       false,
 			nerdctlVersion:                 nerdctl2xx,
+			windowsHostPathTranslation:     false,
 		},
 	}
 	for _, modifier := range modifiers {
@@ -68,10 +72,43 @@ func New(subject []string, modifiers ...Modifier) (*Option, error) {
 // NewCmd creates a command using the stored option and the provided args.
 func (o *Option) NewCmd(args ...string) *exec.Cmd {
 	cmdName := o.subject[0]
-	cmdArgs := append(o.subject[1:], args...) //nolint:gocritic // appendAssign does not apply to our case.
-	cmd := exec.Command(cmdName, cmdArgs...)  //nolint:gosec // G204 is not an issue because cmdName is fully controlled by the user.
+	if o.SupportsEnvVarPassthrough() && o.SupportsResolveEnvVarPassthrough() {
+		args = resolveEnvPassthrough(args)
+	}
+	if o.SupportsWindowsHostPathTranslation() {
+		args = translateWindowsHostPaths(args)
+	}
+
+	// Inject o.env as `KEY=VALUE` tokens right before the
+	// final subject element (the command, e.g. nerdctl).
+	// This mirrors the Finch CLI's host-env passthrough.
+	// See (https://github.com/runfinch/finch/blob/ff1346b1d76f083ba86433e4501cbb5e5ce29634/cmd/finch/nerdctl_remote.go#L319).
+	subjectArgs := o.subject[1:]
+	if o.SupportsEnvVarPassthrough() &&
+		o.SupportsResolveEnvVarPassthrough() &&
+		o.SupportsWindowsHostPathTranslation() &&
+		len(o.env) > 0 {
+		env := o.env
+		env = translateWindowsHostEnv(env)
+		subjectArgs = injectEnvBeforeLast(subjectArgs, env)
+	}
+
+	cmdArgs := append(subjectArgs, args...)  //nolint:gocritic // appendAssign does not apply to our case.
+	cmd := exec.Command(cmdName, cmdArgs...) //nolint:gosec // G204 is not an issue because cmdName is fully controlled by the user.
 	cmd.Env = append(os.Environ(), o.env...)
 	return cmd
+}
+
+func injectEnvBeforeLast(subjectArgs, env []string) []string {
+	if len(subjectArgs) == 0 {
+		return append([]string{}, env...)
+	}
+	last := len(subjectArgs) - 1
+	out := make([]string, 0, len(subjectArgs)+len(env))
+	out = append(out, subjectArgs[:last]...)
+	out = append(out, env...)
+	out = append(out, subjectArgs[last])
+	return out
 }
 
 // UpdateEnv updates the environment variable for the key name of the input.
@@ -106,6 +143,28 @@ func containsEnv(envs []string, targetEnvKey string) (int, bool) {
 // supports [feature.environmentVariablePassthrough].
 func (o *Option) SupportsEnvVarPassthrough() bool {
 	if value, exists := o.features[environmentVariablePassthrough]; exists {
+		if boolValue, ok := value.(bool); ok {
+			return boolValue
+		}
+	}
+	return false
+}
+
+// SupportsWindowsHostPathTranslation reports whether command arguments should
+// have Windows host paths rewritten to their WSL2 equivalents before execution.
+func (o *Option) SupportsWindowsHostPathTranslation() bool {
+	if value, exists := o.features[windowsHostPathTranslation]; exists {
+		if boolValue, ok := value.(bool); ok {
+			return boolValue
+		}
+	}
+	return false
+}
+
+// SupportsResolveEnvVarPassthrough is used by tests to check if the option
+// supports [feature.resolveEnvVarPassthrough].
+func (o *Option) SupportsResolveEnvVarPassthrough() bool {
+	if value, exists := o.features[resolveEnvVarPassthrough]; exists {
 		if boolValue, ok := value.(bool); ok {
 			return boolValue
 		}
@@ -159,9 +218,21 @@ func (o *Option) GetNerdctlVersion() (string, error) {
 		//nolint:gosec // G204 is not an issue because subject is fully controlled by the user.
 		versionBytes, err := exec.Command(o.subject[0], "version").Output()
 		if err != nil {
-			return "", fmt.Errorf("failed to run nerdctl --version: %w", err)
+			return "", fmt.Errorf("failed to run finch version: %w", err)
 		}
 		version, err := getNerdctlVersionMatch(finchNerdctlVersionRegex, string(versionBytes))
+		if err != nil {
+			return "", err
+		}
+		return version, nil
+	case "limactl":
+		// Assumes that "finch" is the vm name
+		//nolint:gosec // G204 is not an issue because subject is fully controlled by the user.
+		versionBytes, err := exec.Command(o.subject[0], "shell", "finch", "nerdctl", "--version").Output()
+		if err != nil {
+			return "", fmt.Errorf("failed to run nerdctl --version with limactl: %w", err)
+		}
+		version, err := getNerdctlVersionMatch(nerdctlVersionRegex, string(versionBytes))
 		if err != nil {
 			return "", err
 		}
