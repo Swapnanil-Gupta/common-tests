@@ -18,6 +18,7 @@ type feature int
 
 const (
 	environmentVariablePassthrough feature = iota
+	resolveEnvVarPassthrough       feature = iota
 	nerdctlVersion                 feature = iota
 	windowsHostPathTranslation     feature = iota
 )
@@ -56,6 +57,7 @@ func New(subject []string, modifiers ...Modifier) (*Option, error) {
 		subject: subject,
 		features: map[feature]any{
 			environmentVariablePassthrough: true,
+			resolveEnvVarPassthrough:       false,
 			nerdctlVersion:                 nerdctl2xx,
 			windowsHostPathTranslation:     false,
 		},
@@ -78,6 +80,18 @@ func (o *Option) NewCmd(args ...string) *exec.Cmd {
 	cmd := exec.Command(cmdName, cmdArgs...)  //nolint:gosec // G204 is not an issue because cmdName is fully controlled by the user.
 	cmd.Env = append(os.Environ(), o.env...)
 	return cmd
+}
+
+func injectEnvBeforeLast(subjectArgs, env []string) []string {
+	if len(subjectArgs) == 0 {
+		return append([]string{}, env...)
+	}
+	last := len(subjectArgs) - 1
+	out := make([]string, 0, len(subjectArgs)+len(env))
+	out = append(out, subjectArgs[:last]...)
+	out = append(out, env...)
+	out = append(out, subjectArgs[last])
+	return out
 }
 
 // UpdateEnv updates the environment variable for the key name of the input.

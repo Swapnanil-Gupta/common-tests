@@ -350,3 +350,157 @@ func TestNerdctlVersion(t *testing.T) {
 		})
 	}
 }
+
+//nolint:paralleltest // subtests set process environment variables via t.Setenv, which is incompatible with t.Parallel.
+func TestResolveEnvPassthrough(t *testing.T) {
+	t.Setenv("AVAR1", "avalue")
+	os.Unsetenv("AVAR2") //nolint:errcheck // ensure AVAR2 is not set on the host.
+
+	tests := []struct {
+		name string
+		in   []string
+		want []string
+	}{
+		{
+			name: "ValuelessSetVarResolvedSeparateForm",
+			in:   []string{"run", "--rm", "-e", "AVAR1", "alpine:latest", "env"},
+			want: []string{"run", "--rm", "-e", "AVAR1=avalue", "alpine:latest", "env"},
+		},
+		{
+			name: "ValuelessUnsetVarDroppedSeparateForm",
+			in:   []string{"run", "--rm", "-e", "AVAR2", "alpine:latest", "env"},
+			want: []string{"run", "--rm", "alpine:latest", "env"},
+		},
+		{
+			name: "MixedSetAndUnset",
+			in:   []string{"run", "-e", "AVAR1", "-e", "AVAR2", "alpine:latest"},
+			want: []string{"run", "-e", "AVAR1=avalue", "alpine:latest"},
+		},
+		{
+			name: "ExplicitPairUntouched",
+			in:   []string{"run", "-e", "FOO=BAR", "alpine:latest"},
+			want: []string{"run", "-e", "FOO=BAR", "alpine:latest"},
+		},
+		{
+			name: "InlineValuelessSetVarResolved",
+			in:   []string{"run", "-eAVAR1", "alpine:latest"},
+			want: []string{"run", "-eAVAR1=avalue", "alpine:latest"},
+		},
+		{
+			name: "InlineExplicitPairUntouched",
+			in:   []string{"run", "-eFOO=BAR", "alpine:latest"},
+			want: []string{"run", "-eFOO=BAR", "alpine:latest"},
+		},
+		{
+			name: "LongEnEqualsValuelessResolved",
+			in:   []string{"run", "--env=AVAR1", "alpine:latest"},
+			want: []string{"run", "--env=AVAR1=avalue", "alpine:latest"},
+		},
+		{
+			name: "LongEnvSeparateUnsetDropped",
+			in:   []string{"run", "--env", "AVAR2", "alpine:latest"},
+			want: []string{"run", "alpine:latest"},
+		},
+		{
+			name: "TrailingEnvFlagWithoutValueUntouched",
+			in:   []string{"run", "alpine:latest", "-e"},
+			want: []string{"run", "alpine:latest", "-e"},
+		},
+		{
+			name: "NoEnvArgsUntouched",
+			in:   []string{"run", "--rm", "alpine:latest", "env"},
+			want: []string{"run", "--rm", "alpine:latest", "env"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := resolveEnvPassthrough(test.in)
+			assertArgsEqual(t, got, test.want)
+		})
+	}
+}
+
+//nolint:paralleltest // subtests set process environment variables via t.Setenv, which is incompatible with t.Parallel.
+func TestResolveEnvPassthroughEnvFile(t *testing.T) {
+	t.Setenv("AVAR1", "avalue")
+	os.Unsetenv("AVAR2") //nolint:errcheck // ensure AVAR2 is not set on the host.
+
+	dir := t.TempDir()
+	envPath := filepath.Join(dir, "env")
+	// ENVKEY has a value; AVAR1 is set on host; AVAR2 is unset; comment and blank
+	// lines are ignored.
+	content := "ENVKEY=ENVVAL\n# a comment\n\nAVAR1\nAVAR2\n"
+	if err := os.WriteFile(envPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("failed to write env file: %v", err)
+	}
+
+	t.Run("SeparateForm", func(t *testing.T) {
+		in := []string{"run", "--rm", "--env-file", envPath, "alpine:latest", "env"}
+		want := []string{"run", "--rm", "-e", "ENVKEY=ENVVAL", "-e", "AVAR1=avalue", "alpine:latest", "env"}
+		assertArgsEqual(t, resolveEnvPassthrough(in), want)
+	})
+
+	t.Run("EqualsForm", func(t *testing.T) {
+		in := []string{"run", "--env-file=" + envPath, "alpine:latest"}
+		want := []string{"run", "-e", "ENVKEY=ENVVAL", "-e", "AVAR1=avalue", "alpine:latest"}
+		assertArgsEqual(t, resolveEnvPassthrough(in), want)
+	})
+
+	t.Run("MissingFileLeavesArgsUntouched", func(t *testing.T) {
+		in := []string{"run", "--env-file", filepath.Join(dir, "does-not-exist"), "alpine:latest"}
+		want := []string{"run", "--env-file", filepath.Join(dir, "does-not-exist"), "alpine:latest"}
+		assertArgsEqual(t, resolveEnvPassthrough(in), want)
+	})
+}
+
+func assertArgsEqual(t *testing.T, got, want []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("length mismatch: got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("arg %d: got %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestNewCmdEnvInjection(t *testing.T) {
+	t.Parallel()
+
+	subject := []string{"limactl", "shell", "finch", "sudo", "-E", "nerdctl"}
+
+	t.Run("InjectsEnvBeforeCommandWhenResolutionEnabled", func(t *testing.T) {
+		t.Parallel()
+
+		uut, err := New(subject, WithResolveEnvVarPassthrough())
+		if err != nil {
+			t.Fatal(err)
+		}
+		uut.UpdateEnv("COMPOSE_FILE", "/tmp/docker-compose.yaml")
+
+		cmd := uut.NewCmd("compose", "build")
+		// limactl [shell finch sudo -E COMPOSE_FILE=/tmp/... nerdctl] compose build
+		want := []string{
+			"shell", "finch", "sudo", "-E",
+			"COMPOSE_FILE=/tmp/docker-compose.yaml", "nerdctl",
+			"compose", "build",
+		}
+		assertArgsEqual(t, cmd.Args[1:], want)
+	})
+
+	t.Run("DoesNotInjectEnvWhenResolutionDisabled", func(t *testing.T) {
+		t.Parallel()
+
+		uut, err := New(subject)
+		if err != nil {
+			t.Fatal(err)
+		}
+		uut.UpdateEnv("COMPOSE_FILE", "/tmp/docker-compose.yaml")
+
+		cmd := uut.NewCmd("compose", "build")
+		want := []string{"shell", "finch", "sudo", "-E", "nerdctl", "compose", "build"}
+		assertArgsEqual(t, cmd.Args[1:], want)
+	})
+}
