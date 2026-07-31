@@ -4,8 +4,6 @@
 package option
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -78,50 +76,6 @@ func TestSupportsWindowsHostPathTranslation(t *testing.T) {
 			assert: func(t *testing.T, uut *Option) {
 				if !uut.SupportsWindowsHostPathTranslation() {
 					t.Fatal("expected SupportsWindowsHostPathTranslation to be true")
-				}
-			},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			uut, err := New([]string{"nerdctl"}, test.mods...)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			test.assert(t, uut)
-		})
-	}
-}
-
-func TestSupportsResolveEnvVarPassthrough(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name   string
-		mods   []Modifier
-		assert func(*testing.T, *Option)
-	}{
-		{
-			name: "IsNotResolveEnvVarPassthrough",
-			mods: []Modifier{},
-			assert: func(t *testing.T, uut *Option) {
-				if uut.SupportsResolveEnvVarPassthrough() {
-					t.Fatal("expected default SupportsResolveEnvVarPassthrough to be false")
-				}
-			},
-		},
-		{
-			name: "IsresolveEnvVarPassthrough",
-			mods: []Modifier{
-				WithResolveEnvVarPassthrough(),
-			},
-			assert: func(t *testing.T, uut *Option) {
-				if !uut.SupportsResolveEnvVarPassthrough() {
-					t.Fatal("expected SupportsResolveEnvVarPassthrough to be true")
 				}
 			},
 		},

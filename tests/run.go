@@ -145,6 +145,10 @@ func Run(o *RunOption) {
 
 			for _, env := range []string{"-e", "--env"} {
 				ginkgo.It(fmt.Sprintf("with %s flag, environment variables should be set in the container", env), func() {
+					if !o.BaseOpt.SupportsEnvVarPassthrough() {
+						ginkgo.Skip("Test requires option environment variable passthrough")
+					}
+
 					envOutput := command.Stdout(o.BaseOpt, "run", "--rm",
 						env, "FOO=BAR", env, "FOO1", env, "ENV1=1", env, "ENV1=2",
 						localImages[defaultImage], "env")

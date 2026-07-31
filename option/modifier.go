@@ -62,15 +62,3 @@ func WithWindowsHostPathTranslation() Modifier {
 		o.features[windowsHostPathTranslation] = true
 	})
 }
-
-// WithResolveEnvVarPassthrough makes the option layer resolve valueless
-// -e/--env/--env-file entries against the host environment before executing.
-//
-// This is done in the Finch CLI too.
-// See (https://github.com/runfinch/finch/blob/ff1346b1d76f083ba86433e4501cbb5e5ce29634/cmd/finch/nerdctl_remote.go#L554),
-// But since common-tests is meant to be executed outside of Finch CLI (e.g Finch Core), we need this as an option.
-func WithResolveEnvVarPassthrough() Modifier {
-	return newFuncModifier(func(o *Option) {
-		o.features[resolveEnvVarPassthrough] = true
-	})
-}

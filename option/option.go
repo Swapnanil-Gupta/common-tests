@@ -72,29 +72,12 @@ func New(subject []string, modifiers ...Modifier) (*Option, error) {
 // NewCmd creates a command using the stored option and the provided args.
 func (o *Option) NewCmd(args ...string) *exec.Cmd {
 	cmdName := o.subject[0]
-	if o.SupportsEnvVarPassthrough() && o.SupportsResolveEnvVarPassthrough() {
-		args = resolveEnvPassthrough(args)
-	}
 	if o.SupportsWindowsHostPathTranslation() {
 		args = translateWindowsHostPaths(args)
 	}
 
-	// Inject o.env as `KEY=VALUE` tokens right before the
-	// final subject element (the command, e.g. nerdctl).
-	// This mirrors the Finch CLI's host-env passthrough.
-	// See (https://github.com/runfinch/finch/blob/ff1346b1d76f083ba86433e4501cbb5e5ce29634/cmd/finch/nerdctl_remote.go#L319).
-	subjectArgs := o.subject[1:]
-	if o.SupportsEnvVarPassthrough() &&
-		o.SupportsResolveEnvVarPassthrough() &&
-		o.SupportsWindowsHostPathTranslation() &&
-		len(o.env) > 0 {
-		env := o.env
-		env = translateWindowsHostEnv(env)
-		subjectArgs = injectEnvBeforeLast(subjectArgs, env)
-	}
-
-	cmdArgs := append(subjectArgs, args...)  //nolint:gocritic // appendAssign does not apply to our case.
-	cmd := exec.Command(cmdName, cmdArgs...) //nolint:gosec // G204 is not an issue because cmdName is fully controlled by the user.
+	cmdArgs := append(o.subject[1:], args...) //nolint:gocritic // appendAssign does not apply to our case.
+	cmd := exec.Command(cmdName, cmdArgs...)  //nolint:gosec // G204 is not an issue because cmdName is fully controlled by the user.
 	cmd.Env = append(os.Environ(), o.env...)
 	return cmd
 }
@@ -154,17 +137,6 @@ func (o *Option) SupportsEnvVarPassthrough() bool {
 // have Windows host paths rewritten to their WSL2 equivalents before execution.
 func (o *Option) SupportsWindowsHostPathTranslation() bool {
 	if value, exists := o.features[windowsHostPathTranslation]; exists {
-		if boolValue, ok := value.(bool); ok {
-			return boolValue
-		}
-	}
-	return false
-}
-
-// SupportsResolveEnvVarPassthrough is used by tests to check if the option
-// supports [feature.resolveEnvVarPassthrough].
-func (o *Option) SupportsResolveEnvVarPassthrough() bool {
-	if value, exists := o.features[resolveEnvVarPassthrough]; exists {
 		if boolValue, ok := value.(bool); ok {
 			return boolValue
 		}
